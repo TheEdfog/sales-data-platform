@@ -1,0 +1,5 @@
+coupon_id,plant,billnum,material,promo_id,coupon_date
+C001,M001,B001,A001,P001,2021-01-10
+C002,M001,B001,A002,P002,2021-01-10
+C003,M002,B003,A002,P002,2021-01-11
+
