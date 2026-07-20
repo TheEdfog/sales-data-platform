@@ -1,101 +1,71 @@
 # Sales Data Platform
 
-An end-to-end data engineering case study for retail sales analytics. The pipeline stages transactional data in a PostgreSQL-compatible warehouse, builds a store-performance mart, publishes the result to ClickHouse, and exposes it to BI tools such as Apache Superset.
+This project builds a store-performance mart from retail transactions, traffic and promotion data. PostgreSQL provides a lightweight local warehouse, the Greenplum SQL documents the intended MPP layout, and ClickHouse serves the finished mart to BI tools.
 
-The original case study was completed during a Sapiens Solutions Greenplum course. This repository is an extended and cleaned-up portfolio version: source code is organized, sample data is synthetic, the local environment is reproducible, and the core mart logic is covered by automated tests.
+The first version was my final project for a Sapiens Solutions Greenplum course. I later rebuilt it as a runnable repository with synthetic data, automated validation and tests.
 
-## Business goal
-
-Create one analytical mart for comparing store performance across a selected period:
-
-- gross and net revenue;
-- discounts;
-- sold quantity and receipt count;
-- visitor traffic and conversion rate;
-- promotional share;
-- average items per receipt;
-- average receipt and revenue per visitor.
-
-The field previously called `profit` is named `net_revenue` here. Revenue after discounts is not accounting profit and should not be presented as such.
-
-## Architecture
+## Data flow
 
 ```text
-CSV dimensions ───────┐
-                      ├── PostgreSQL / Greenplum ── store mart ── ClickHouse ── Superset
-transactional source ─┘             ▲
-                                    │
-                              Apache Airflow
+CSV dimensions + transaction tables
+                 |
+                 v
+        PostgreSQL / Greenplum
+                 |
+                 v
+        store performance mart
+                 |
+                 v
+             ClickHouse
+
+Airflow coordinates the load, mart build and publication stages.
 ```
 
-The production-oriented design targets Greenplum:
+The mart contains gross and net revenue, discounts, quantities, receipt counts, traffic, conversion, promotional share and average receipt measures. The name `net_revenue` is deliberate: revenue after discounts is not accounting profit.
 
-- dimensions are replicated;
-- large facts are distributed on join keys;
-- facts are partitioned by date;
-- incremental loads replace only affected partitions;
-- ClickHouse acts as the low-latency serving layer.
+## Run the pipeline
 
-The local demo uses PostgreSQL because it is lightweight and compatible with the portable mart query. Greenplum-specific DDL and design notes are kept separately under `sql/greenplum/`.
-
-![Original Airflow DAG](docs/original-airflow-dag.png)
-
-## Repository structure
-
-```text
-.
-├── dags/                         # Airflow orchestration example
-├── docs/                         # Architecture, ERD, and dashboard evidence
-├── sample_data/                  # Small synthetic dataset
-├── sales_pipeline/               # Reusable pipeline runner
-├── sql/
-│   ├── marts/                    # Portable analytical query
-│   ├── postgres/                 # Reproducible local schema
-│   └── greenplum/                # Target MPP design
-├── tests/                        # Mart and configuration tests
-├── docker-compose.yml
-└── pyproject.toml
-```
-
-## Quick start
-
-Requirements: Docker with Compose.
+Docker with Compose is required.
 
 ```bash
 docker compose up --build --abort-on-container-exit pipeline
 ```
 
-The command:
+The command creates the source and warehouse tables, loads the sample data, builds `sales.mart_store_performance`, validates it and publishes the result to ClickHouse.
 
-1. creates the PostgreSQL source and warehouse tables;
-2. loads synthetic CSV data;
-3. builds `sales.mart_store_performance`;
-4. publishes the mart to ClickHouse;
-5. prints row counts and validation totals.
-
-Inspect the mart in PostgreSQL:
+Inspect the warehouse mart:
 
 ```bash
 docker compose exec postgres psql -U sales -d sales -c \
   "select * from sales.mart_store_performance order by plant"
 ```
 
-Inspect the ClickHouse serving table:
+Inspect the ClickHouse table:
 
 ```bash
 docker compose exec clickhouse clickhouse-client --query \
   "select * from sales.mart_store_performance order by plant format PrettyCompact"
 ```
 
-Stop and remove local containers:
+Use `docker compose down -v` when you want to remove the local containers and their data.
 
-```bash
-docker compose down -v
-```
+## Design notes
 
-## Pipeline commands
+The Greenplum design keeps receipt headers and lines together on `billnum`, replicates small dimensions, partitions facts by date and uses append-optimized column storage for analytical tables. The local PostgreSQL setup does not try to imitate Greenplum distribution; it exists to make the transformations easy to run and test.
 
-The same runner can execute stages independently:
+The mart starts from the store dimension and joins aggregates with `LEFT JOIN`, so a store does not disappear when traffic or promotion data is absent. Coupon duplicates are resolved deterministically with `row_number()`.
+
+Before publication the pipeline checks:
+
+- uniqueness of business keys and the mart grain;
+- non-negative quantities, revenue, traffic and discounts;
+- receipt-to-line referential integrity;
+- revenue reconciliation with the source lines;
+- valid conversion and promotion-rate ranges.
+
+Any failed check stops the pipeline.
+
+## Run individual stages
 
 ```bash
 python -m sales_pipeline init
@@ -104,88 +74,36 @@ python -m sales_pipeline publish
 python -m sales_pipeline all
 ```
 
-Connection settings are read from environment variables. See `.env.example`.
+Connection settings come from environment variables listed in `.env.example`.
 
-## Data model
+## Repository layout
 
-Facts:
+```text
+dags/               Airflow DAG
+docs/               diagrams and dashboard evidence
+sample_data/        synthetic retail data
+sales_pipeline/     pipeline runner and validation
+sql/marts/          portable mart query
+sql/postgres/       local schema
+sql/greenplum/      target MPP schema
+tests/              mart and configuration tests
+```
 
-- `bills_head`: receipt header and transaction date;
-- `bills_item`: receipt lines, quantities, and gross amounts;
-- `traffic`: visitors per store and day;
-- `coupons`: applied promotion per item.
-
-Dimensions:
-
-- `stores`;
-- `promos`;
-- `promo_types`.
-
-![Entity relationship diagram](docs/erd.png)
-
-## Mart calculation
-
-The portable query in `sql/marts/store_performance.sql` is used by the local PostgreSQL runner and by DuckDB-based tests. The query deliberately uses `LEFT JOIN` from stores to aggregates so stores are not silently removed when traffic or promotions are absent.
-
-Discount rules in the synthetic example:
-
-- type `001`: fixed discount amount;
-- type `002`: percentage of unit price;
-- one discount per `coupon_id`, selected deterministically with `row_number()`.
-
-The test suite verifies revenue, discounts, receipt counts, traffic conversion, promotional share, and zero/empty edge cases.
-
-## Airflow orchestration
-
-`dags/sales_pipeline.py` shows three explicit stages:
-
-1. initialize and load sources;
-2. build and validate the warehouse mart;
-3. publish the serving table to ClickHouse.
-
-The DAG calls the same package used by Docker and local execution, avoiding a second implementation hidden inside Airflow operators.
-
-## Greenplum design
-
-`sql/greenplum/001_schema.sql` documents the target MPP layout:
-
-- co-location of `bills_head` and `bills_item` on `billnum`;
-- replicated small dimensions;
-- monthly range partitions for date-based fact access;
-- append-optimized column storage for analytical facts and marts.
-
-The local PostgreSQL schema does not pretend to reproduce Greenplum distribution behavior. It exists to validate transformations and make the project runnable without a multi-node cluster.
-
-## Data quality
-
-The pipeline validates:
-
-- uniqueness of business keys;
-- non-negative quantities, revenue, traffic, and discounts;
-- referential integrity between receipts and receipt lines;
-- uniqueness of the mart grain (`plant`);
-- reconciliation of mart revenue against source receipt lines;
-- valid conversion and promotional-rate ranges.
-
-Validation failures stop the pipeline before publication.
-
-## Development
+## Checks
 
 ```bash
-python -m venv .venv
-.venv/Scripts/activate
 python -m pip install -e ".[dev]"
 pytest
 ruff check .
 ruff format --check .
 ```
 
-CI runs the same checks on every push and pull request.
+## Screenshots and data
 
-## Evidence and limitations
+The repository contains synthetic data only. The ER diagram, Airflow graph and Superset screenshot come from the original managed course environment, which is not distributed here.
 
-The diagrams and dashboard screenshot under `docs/` come from the original course environment. That managed environment is not distributed with this repository. The included source data is synthetic and contains no company or customer data.
+![Entity relationship diagram](docs/erd.png)
 
-![Superset dashboard from the original environment](docs/superset-dashboard.png)
+![Airflow DAG](docs/original-airflow-dag.png)
 
-This project demonstrates data modeling, SQL transformations, orchestration boundaries, MPP design decisions, validation, and a serving-layer pattern. It is not a benchmark of Greenplum or ClickHouse performance.
+![Superset dashboard](docs/superset-dashboard.png)
