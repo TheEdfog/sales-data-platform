@@ -1,4 +1,3 @@
 type_id,description
-001,Fixed discount
-002,Percentage discount
-
+001,Скидка в абсолютном выражении
+002,Скидка в относительном выражении

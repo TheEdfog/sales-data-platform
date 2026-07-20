@@ -2,7 +2,7 @@
 
 This project builds a store-performance mart from retail transactions, traffic and promotion data. PostgreSQL provides a lightweight local warehouse, the Greenplum SQL documents the intended MPP layout, and ClickHouse serves the finished mart to BI tools.
 
-The first version was my final project for a Sapiens Solutions Greenplum course. I later rebuilt it as a runnable repository with synthetic data, automated validation and tests.
+The first version was my final project for a Sapiens Solutions Greenplum course. I later rebuilt it as a runnable repository with automated validation and tests. The included CSV files are a normalized extract of the anonymized course dataset, not generated fixtures.
 
 ## Data flow
 
@@ -81,7 +81,7 @@ Connection settings come from environment variables listed in `.env.example`.
 ```text
 dags/               Airflow DAG
 docs/               diagrams and dashboard evidence
-sample_data/        synthetic retail data
+sample_data/        normalized extract of the course dataset
 sales_pipeline/     pipeline runner and validation
 sql/marts/          portable mart query
 sql/postgres/       local schema
@@ -100,7 +100,11 @@ ruff format --check .
 
 ## Screenshots and data
 
-The repository contains synthetic data only. The ER diagram, Airflow graph and Superset screenshot come from the original managed course environment, which is not distributed here.
+The dataset covers 15 anonymized stores over January and February 2021. It contains 3,213 receipts, 10,516 aggregated receipt lines, 885 daily traffic records and 597 coupons. Receipt-line duplicates from the source workbook are grouped by receipt and material because that pair is the warehouse table's business key.
+
+Only the normalized CSV tables required by the pipeline are included. The original workbook, course notes and presentation are deliberately excluded: they contain environment-specific connection details that are irrelevant to running the project. See [sample_data/README.md](sample_data/README.md) for the table mapping.
+
+The ER diagram, Airflow graph and Superset screenshot come from the original managed course environment.
 
 ![Entity relationship diagram](docs/erd.png)
 
