@@ -9,6 +9,7 @@ description = "Retail sales mart pipeline for PostgreSQL/Greenplum and ClickHous
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [{ name = "Alim Narmamatov" }]
+license = { file = "LICENSE" }
 dependencies = [
   "clickhouse-connect>=0.8,<1",
   "psycopg[binary]>=3.2,<4",

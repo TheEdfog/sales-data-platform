@@ -19,6 +19,8 @@ CSV dimensions + transaction tables
              ClickHouse
 
 Airflow coordinates the load, mart build and publication stages.
+
+The lightweight Compose stack runs those stages directly and does not pull a full Airflow image. The DAG in `dags/` is the orchestration definition used when the package is deployed into an Airflow environment.
 ```
 
 The mart contains gross and net revenue, discounts, quantities, receipt counts, traffic, conversion, promotional share and average receipt measures. The name `net_revenue` is deliberate: revenue after discounts is not accounting profit.
@@ -104,7 +106,7 @@ The dataset covers 15 anonymized stores over January and February 2021. It conta
 
 Only the normalized CSV tables required by the pipeline are included. The original workbook, course notes and presentation are deliberately excluded: they contain environment-specific connection details that are irrelevant to running the project. See [sample_data/README.md](sample_data/README.md) for the table mapping.
 
-The ER diagram, Airflow graph and Superset screenshot come from the original managed course environment.
+The ER diagram and Superset screenshot come from the original managed course environment. The older Airflow graph remains as historical evidence and uses the course schema name; the maintained DAG and local schema use neutral names.
 
 ![Entity relationship diagram](docs/erd.png)
 
