@@ -1,17 +1,17 @@
-# Dataset notes
+# Описание датасета
 
-These CSV files are a normalized extract of the anonymized retail dataset supplied for the Sapiens Solutions course project. Store, receipt, material, promotion and coupon identifiers are course identifiers; the source contains no customer names or contact details.
+CSV-файлы — нормализованная выгрузка из анонимизированного набора для курсового проекта Sapiens Solutions. Идентификаторы магазинов, чеков, материалов, акций и купонов относятся только к учебному набору; имён и контактов покупателей в данных нет.
 
-The source workbook was converted into the repository schema as follows:
+Исходный Excel преобразован в схему репозитория следующим образом:
 
-| CSV | Source sheet | Transformation |
+| CSV | Лист Excel | Преобразование |
 | --- | --- | --- |
-| `stores.csv` | `Магазины` | Store code and generic display name |
-| `promo_types.csv` | `Тип акции` | Promotion type code and description |
-| `promos.csv` | `Акции` | Promotion, material, discount type and value |
-| `bills_head.csv` | `Чеки` | One row per receipt with store and date |
-| `bills_item.csv` | `Чеки` | Lines grouped by receipt and material; revenue and quantity are summed |
-| `traffic.csv` | `Трафик` | Hourly frames grouped into daily store traffic |
-| `coupons.csv` | `coupons` | Coupon links retained only when the receipt line and promotion exist |
+| `stores.csv` | `Магазины` | Код магазина и нейтральное отображаемое название |
+| `promo_types.csv` | `Тип акции` | Код и описание типа акции |
+| `promos.csv` | `Акции` | Акция, материал, тип и величина скидки |
+| `bills_head.csv` | `Чеки` | Одна строка на чек с магазином и датой |
+| `bills_item.csv` | `Чеки` | Строки сгруппированы по чеку и материалу; выручка и количество суммируются |
+| `traffic.csv` | `Трафик` | Часовые интервалы агрегированы в дневной трафик магазина |
+| `coupons.csv` | `coupons` | Связь купона сохранена только при наличии строки чека и акции |
 
-The raw workbook is not part of the repository. This keeps the example focused on the pipeline and avoids distributing obsolete training-environment connection details embedded in the accompanying course documents.
+Исходный workbook не входит в репозиторий. Это оставляет пример компактным и исключает распространение устаревших реквизитов подключения, которые находились в учебных документах.
