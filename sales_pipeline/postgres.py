@@ -22,6 +22,19 @@ def _execute_file(connection: psycopg.Connection, path: Path) -> None:
     connection.execute(path.read_text(encoding="utf-8"))
 
 
+def _load_csv(connection: psycopg.Connection, table: str, path: Path) -> None:
+    with path.open(encoding="utf-8", newline="") as source:
+        reader = csv.reader(source)
+        columns = next(reader)
+        connection.execute(f"truncate table sales.{table} cascade")
+        column_list = ", ".join(columns)
+        with connection.cursor().copy(
+            f"copy sales.{table} ({column_list}) from stdin with (format csv)"
+        ) as copy:
+            for row in reader:
+                copy.write_row(row)
+
+
 def initialize(settings: Settings) -> None:
     schema_path = settings.project_root / "sql" / "postgres" / "001_schema.sql"
     data_dir = settings.project_root / "sample_data"
@@ -29,17 +42,7 @@ def initialize(settings: Settings) -> None:
     with psycopg.connect(settings.postgres_dsn) as connection:
         _execute_file(connection, schema_path)
         for table in TABLES:
-            csv_path = data_dir / f"{table}.csv"
-            with csv_path.open(encoding="utf-8", newline="") as source:
-                reader = csv.reader(source)
-                columns = next(reader)
-                connection.execute(f"truncate table sales.{table} cascade")
-                column_list = ", ".join(columns)
-                with connection.cursor().copy(
-                    f"copy sales.{table} ({column_list}) from stdin with (format csv)"
-                ) as copy:
-                    for row in reader:
-                        copy.write_row(row)
+            _load_csv(connection, table, data_dir / f"{table}.csv")
 
 
 def build_mart(settings: Settings) -> int:
